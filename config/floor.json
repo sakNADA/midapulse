@@ -1,0 +1,12 @@
+{
+  "restaurant": "MidaPulse Demo Dining Room",
+  "camera_policy": "Zones use anonymous occupancy observations; raw frames are not stored.",
+  "tables": [
+    {"id": "T1", "label": "Table 01", "seats": 2, "x": 14, "y": 22, "attention_after_minutes": 45, "server": "Sara"},
+    {"id": "T2", "label": "Table 02", "seats": 4, "x": 44, "y": 20, "attention_after_minutes": 50, "server": "Omar"},
+    {"id": "T3", "label": "Table 03", "seats": 4, "x": 73, "y": 25, "attention_after_minutes": 50, "server": "Sara"},
+    {"id": "T4", "label": "Table 04", "seats": 6, "x": 16, "y": 66, "attention_after_minutes": 65, "server": "Omar"},
+    {"id": "T5", "label": "Table 05", "seats": 2, "x": 47, "y": 68, "attention_after_minutes": 45, "server": "Sara"},
+    {"id": "T6", "label": "Table 06", "seats": 4, "x": 76, "y": 65, "attention_after_minutes": 50, "server": "Omar"}
+  ]
+}

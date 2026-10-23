@@ -1,0 +1,19 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      MIDAPULSE_DB_PATH: /data/midapulse.db
+      MIDAPULSE_CORS_ORIGINS: http://localhost:5174,http://127.0.0.1:5174
+    volumes: [midapulse-data:/data]
+    ports: ["8100:8100"]
+  web:
+    build: frontend
+    environment:
+      VITE_API_URL: http://127.0.0.1:8100
+    ports: ["5174:5173"]
+    depends_on: [api]
+volumes:
+  midapulse-data:
+
