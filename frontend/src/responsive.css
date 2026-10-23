@@ -1,0 +1,83 @@
+@media (max-width: 720px) {
+  body {
+    overflow-x: hidden;
+  }
+
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .app,
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .grid {
+    display: block;
+  }
+
+  .right {
+    margin-top: 15px;
+  }
+
+  .app,
+  main,
+  .grid,
+  .floor,
+  .right,
+  .map {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  main {
+    overflow: hidden;
+  }
+
+  .actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+  }
+
+  .actions button {
+    min-width: 0;
+    padding: 0 8px;
+    gap: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .map {
+    height: auto;
+    padding: 15px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .map::before,
+  .map::after {
+    display: none;
+  }
+
+  .bar {
+    position: relative;
+    inset: auto;
+    grid-column: 1 / -1;
+  }
+
+  .table {
+    position: relative;
+    inset: auto !important;
+    width: 100%;
+    transform: none;
+  }
+
+  .table:hover {
+    transform: translateY(-2px);
+  }
+}
