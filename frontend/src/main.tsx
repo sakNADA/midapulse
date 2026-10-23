@@ -1,31 +1,68 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, BellRing, Check, EyeOff, RotateCcw, Sparkles, Users, Utensils } from "lucide-react";
+import {
+  Activity,
+  BellRing,
+  Check,
+  EyeOff,
+  RotateCcw,
+  Sparkles,
+  Users,
+  Utensils,
+} from "lucide-react";
 import "./styles.css";
-import "./responsive.css";
 
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8100";
+
 type State = "available_clean" | "occupied" | "attention_due" | "vacated_needs_cleaning" | "cleaning" | "out_of_service";
 type Table = {id:string;label:string;seats:number;zone_x:number;zone_y:number;state:State;elapsed_minutes:number;assigned_server:string|null;last_confidence:number};
 type Alert = {id:number;table_id:string;alert_type:string;priority:string;message:string;status:string;created_at:string;acknowledged_by:string|null};
 type Snapshot = {tables:Table[];alerts:Alert[];metrics:Record<string,number>};
+
 const labels:Record<State,string>={available_clean:"Ready",occupied:"Dining",attention_due:"Check guests",vacated_needs_cleaning:"Clean table",cleaning:"Cleaning",out_of_service:"Offline"};
 
 function App(){
   const [data,setData]=useState<Snapshot>({tables:[],alerts:[],metrics:{available:0,occupied:0,attention_due:0,needs_cleaning:0}});
-  const [selected,setSelected]=useState<string>("T1"); const [error,setError]=useState(""); const [busy,setBusy]=useState(false);
+  const [selected,setSelected]=useState("T1");
+  const [error,setError]=useState("");
+  const [busy,setBusy]=useState(false);
   const load=async()=>{try{const r=await fetch(`${API}/api/floor`);if(!r.ok)throw new Error();setData(await r.json());setError("");}catch{setError("API unavailable on port 8100");}};
   useEffect(()=>{load();const timer=setInterval(load,3000);return()=>clearInterval(timer);},[]);
   const act=async(path:string,body?:object)=>{setBusy(true);await fetch(`${API}${path}`,{method:"POST",headers:{"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined});await load();setBusy(false);};
   const chosen=useMemo(()=>data.tables.find(t=>t.id===selected),[data,selected]);
+
   return <div className="app">
-    <aside><div className="brand"><span className="brand-mark"><Activity/></span><div><strong>MidaPulse</strong><span>Floor operations</span></div></div><nav><button className="active"><Utensils/>Dining room</button><button><BellRing/>Service alerts <b>{data.alerts.length}</b></button></nav><div className="privacy"><EyeOff/><div><strong>Privacy mode</strong><span>No faces. No stored video.</span></div></div></aside>
-    <main><header><div><p className="eyebrow">Dinner service - Live</p><h1>Dining room pulse</h1></div><div className="actions"><button onClick={()=>act("/api/demo/reset")}><RotateCcw/>Reset</button><button className="primary" onClick={()=>act("/api/demo/step")} disabled={busy}><Sparkles/>Advance</button></div></header>
-    {error&&<div className="error">{error}</div>}
-    <section className="metrics"><div><span>Available</span><strong>{data.metrics.available||0}</strong></div><div><span>Occupied</span><strong>{data.metrics.occupied||0}</strong></div><div><span>Attention due</span><strong>{data.metrics.attention_due||0}</strong></div><div><span>Needs cleaning</span><strong>{data.metrics.needs_cleaning||0}</strong></div></section>
-    <div className="grid"><section className="floor"><div className="section-title"><div><p className="eyebrow">Camera 01 - Anonymous zones</p><h2>Floor map</h2></div><span className="live"><i/>Live</span></div><div className="legend"><span><i className="ready"/>Ready</span><span><i className="dining"/>Dining</span><span><i className="attention"/>Attention</span><span><i className="clean"/>Clean</span></div><div className="map"><div className="bar"><span>Pass</span><strong>Service counter</strong><span>Pickup</span></div>{data.tables.map(t=><button key={t.id} style={{left:`${t.zone_x}%`,top:`${t.zone_y}%`}} className={`table ${t.state} ${selected===t.id?"selected":""}`} onClick={()=>setSelected(t.id)}><strong>{t.label}</strong><span>{labels[t.state]}</span>{t.elapsed_minutes>0&&<small>{t.elapsed_minutes} min</small>}<em><Users/> {t.seats}</em></button>)}</div></section>
-    <section className="right"><div className="section-title"><div><p className="eyebrow">Action queue</p><h2>Staff alerts</h2></div><span className="queue-count">{data.alerts.length}</span></div>{data.alerts.length===0?<p className="empty">No open alerts. The floor is moving normally.</p>:data.alerts.map(a=><article className={`alert ${a.priority}`} key={a.id}><div><strong>{a.table_id} - {a.alert_type.replaceAll("_"," ")}</strong><p>{a.message}</p></div><button title="Acknowledge alert" aria-label="Acknowledge alert" onClick={()=>act(`/api/alerts/${a.id}/acknowledge`,{server:"Sara"})}><Check/></button></article>)}
-    {chosen&&<div className="table-detail"><div className="detail-heading"><div><p className="eyebrow">Selected table</p><h2>{chosen.label}</h2></div><span className={`state-pill ${chosen.state}`}>{labels[chosen.state]}</span></div><dl><div><dt>Status</dt><dd>{labels[chosen.state]}</dd></div><div><dt>Server</dt><dd>{chosen.assigned_server||"Unassigned"}</dd></div><div><dt>Vision confidence</dt><dd>{Math.round(chosen.last_confidence*100)}%</dd></div></dl>{chosen.state==="vacated_needs_cleaning"&&<button className="primary wide" onClick={()=>act(`/api/tables/${chosen.id}/cleaning`,{staff:"Nora",action:"complete"})}>Mark clean</button>}</div>}
-    </section></div></main></div>
+    <header className="topbar">
+      <div className="brand"><span className="brand-mark"><Activity/></span><div><strong>MidaPulse</strong><span>Floor operations</span></div></div>
+      <div className="service-mode"><i/>Dinner service <span>Camera 01</span></div>
+      <nav><button className="active"><Utensils/>Floor</button><button><BellRing/>Dispatch <b>{data.alerts.length}</b></button></nav>
+      <div className="actions"><button title="Reset demo" onClick={()=>act("/api/demo/reset")}><RotateCcw/><span>Reset</span></button><button className="primary" onClick={()=>act("/api/demo/step")} disabled={busy}><Sparkles/>Advance</button></div>
+    </header>
+
+    <main className="cockpit">
+      {error&&<div className="error">{error}</div>}
+      <section className="service-ribbon">
+        <div className="ribbon-title"><p className="eyebrow">Live room status</p><h1>Dinner floor</h1></div>
+        <div className="metric available"><span>Ready</span><strong>{data.metrics.available||0}</strong><small>Open tables</small></div>
+        <div className="metric occupied"><span>Dining</span><strong>{data.metrics.occupied||0}</strong><small>Active tables</small></div>
+        <div className="metric attention"><span>Attention</span><strong>{data.metrics.attention_due||0}</strong><small>Server check</small></div>
+        <div className="metric cleaning"><span>Turnover</span><strong>{data.metrics.needs_cleaning||0}</strong><small>Needs cleaning</small></div>
+      </section>
+
+      <div className="workspace">
+        <section className="floor-stage">
+          <div className="stage-heading"><div><p className="eyebrow">Anonymous occupancy zones</p><h2>Live floor plan</h2></div><div className="legend"><span><i className="ready"/>Ready</span><span><i className="dining"/>Dining</span><span><i className="attention"/>Attention</span><span><i className="clean"/>Clean</span></div></div>
+          <div className="map"><div className="bar"><span>Pass</span><strong>Service counter</strong><span>Pickup</span></div>{data.tables.map(t=><button key={t.id} style={{left:`${t.zone_x}%`,top:`${t.zone_y}%`}} className={`table ${t.state} ${selected===t.id?"selected":""}`} onClick={()=>setSelected(t.id)}><span className="table-number">{t.label.replace("Table ","")}</span><strong>{t.label}</strong><span>{labels[t.state]}</span>{t.elapsed_minutes>0&&<small>{t.elapsed_minutes} min</small>}<em><Users/> {t.seats}</em></button>)}</div>
+        </section>
+
+        <aside className="dispatch">
+          <section className="queue"><div className="dispatch-heading"><div><p className="eyebrow">Dispatch feed</p><h2>Needs action</h2></div><span className="queue-count">{data.alerts.length}</span></div>{data.alerts.length===0?<p className="empty">No open alerts. The floor is moving normally.</p>:data.alerts.map(a=><article className={`alert ${a.priority}`} key={a.id}><div className="alert-meta"><span>{a.priority}</span><time>Now</time></div><strong>{a.table_id} - {a.alert_type.replaceAll("_"," ")}</strong><p>{a.message}</p><button title="Acknowledge alert" aria-label="Acknowledge alert" onClick={()=>act(`/api/alerts/${a.id}/acknowledge`,{server:"Sara"})}><Check/>Acknowledge</button></article>)}</section>
+          {chosen&&<section className="inspector"><div className="inspector-number">{chosen.label.replace("Table ","")}</div><div className="inspector-title"><div><p className="eyebrow">On the floor</p><h2>{chosen.label}</h2></div><span className={`state-pill ${chosen.state}`}>{labels[chosen.state]}</span></div><dl><div><dt>Assigned server</dt><dd>{chosen.assigned_server||"Unassigned"}</dd></div><div><dt>Elapsed</dt><dd>{chosen.elapsed_minutes} min</dd></div><div><dt>Confidence</dt><dd>{Math.round(chosen.last_confidence*100)}%</dd></div></dl>{chosen.state==="vacated_needs_cleaning"&&<button className="primary wide" onClick={()=>act(`/api/tables/${chosen.id}/cleaning`,{staff:"Nora",action:"complete"})}>Mark clean</button>}</section>}
+          <div className="privacy"><EyeOff/><div><strong>Anonymous by design</strong><span>No faces or stored video.</span></div></div>
+        </aside>
+      </div>
+    </main>
+  </div>
 }
+
 createRoot(document.getElementById("root")!).render(<React.StrictMode><App/></React.StrictMode>);
