@@ -15,7 +15,7 @@ import "./styles.css";
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8100";
 
 type State = "available_clean" | "occupied" | "attention_due" | "vacated_needs_cleaning" | "cleaning" | "out_of_service";
-type Table = {id:string;label:string;seats:number;zone_x:number;zone_y:number;state:State;elapsed_minutes:number;assigned_server:string|null;last_confidence:number};
+type Table = {id:string;label:string;seats:number;zone_x:number;zone_y:number;state:State;elapsed_minutes:number;attention_after_minutes:number;assigned_server:string|null;last_confidence:number};
 type Alert = {id:number;table_id:string;alert_type:string;priority:string;message:string;status:string;created_at:string;acknowledged_by:string|null};
 type Snapshot = {tables:Table[];alerts:Alert[];metrics:Record<string,number>};
 
@@ -26,15 +26,21 @@ function App(){
   const [selected,setSelected]=useState("T1");
   const [error,setError]=useState("");
   const [busy,setBusy]=useState(false);
+  const [now,setNow]=useState(new Date());
+  const [alertFilter,setAlertFilter]=useState<"all"|"urgent">("all");
   const load=async()=>{try{const r=await fetch(`${API}/api/floor`);if(!r.ok)throw new Error();setData(await r.json());setError("");}catch{setError("API unavailable on port 8100");}};
   useEffect(()=>{load();const timer=setInterval(load,3000);return()=>clearInterval(timer);},[]);
+  useEffect(()=>{const timer=setInterval(()=>setNow(new Date()),1000);return()=>clearInterval(timer);},[]);
   const act=async(path:string,body?:object)=>{setBusy(true);await fetch(`${API}${path}`,{method:"POST",headers:{"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined});await load();setBusy(false);};
   const chosen=useMemo(()=>data.tables.find(t=>t.id===selected),[data,selected]);
+  const shownAlerts=alertFilter==="urgent"?data.alerts.filter(a=>a.priority==="high"):data.alerts;
+  const occupancy=Math.round(((data.metrics.occupied||0)/Math.max(data.tables.length,1))*100);
+  const tempo=occupancy>=75?"Peak":occupancy>=45?"Building":"Calm";
 
   return <div className="app">
     <header className="topbar">
       <div className="brand"><span className="brand-mark"><Activity/></span><div><strong>MidaPulse</strong><span>Floor operations</span></div></div>
-      <div className="service-mode"><i/>Dinner service <span>Camera 01</span></div>
+      <div className="service-mode"><i/>Dinner service <span>{now.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"})}</span></div>
       <nav><button className="active"><Utensils/>Floor</button><button><BellRing/>Dispatch <b>{data.alerts.length}</b></button></nav>
       <div className="actions"><button title="Reset demo" onClick={()=>act("/api/demo/reset")}><RotateCcw/><span>Reset</span></button><button className="primary" onClick={()=>act("/api/demo/step")} disabled={busy}><Sparkles/>Advance</button></div>
     </header>
@@ -42,7 +48,7 @@ function App(){
     <main className="cockpit">
       {error&&<div className="error">{error}</div>}
       <section className="service-ribbon">
-        <div className="ribbon-title"><p className="eyebrow">Live room status</p><h1>Dinner floor</h1></div>
+        <div className="ribbon-title"><div><p className="eyebrow">Live room status</p><h1>Dinner floor</h1></div><div className="tempo"><span>{tempo} - {occupancy}%</span><i><b style={{width:`${occupancy}%`}}/></i></div></div>
         <div className="metric available"><span>Ready</span><strong>{data.metrics.available||0}</strong><small>Open tables</small></div>
         <div className="metric occupied"><span>Dining</span><strong>{data.metrics.occupied||0}</strong><small>Active tables</small></div>
         <div className="metric attention"><span>Attention</span><strong>{data.metrics.attention_due||0}</strong><small>Server check</small></div>
@@ -51,13 +57,13 @@ function App(){
 
       <div className="workspace">
         <section className="floor-stage">
-          <div className="stage-heading"><div><p className="eyebrow">Anonymous occupancy zones</p><h2>Live floor plan</h2></div><div className="legend"><span><i className="ready"/>Ready</span><span><i className="dining"/>Dining</span><span><i className="attention"/>Attention</span><span><i className="clean"/>Clean</span></div></div>
-          <div className="map"><div className="bar"><span>Pass</span><strong>Service counter</strong><span>Pickup</span></div>{data.tables.map(t=><button key={t.id} style={{left:`${t.zone_x}%`,top:`${t.zone_y}%`}} className={`table ${t.state} ${selected===t.id?"selected":""}`} onClick={()=>setSelected(t.id)}><span className="table-number">{t.label.replace("Table ","")}</span><strong>{t.label}</strong><span>{labels[t.state]}</span>{t.elapsed_minutes>0&&<small>{t.elapsed_minutes} min</small>}<em><Users/> {t.seats}</em></button>)}</div>
+          <div className="stage-heading"><div><p className="eyebrow">Anonymous occupancy zones</p><h2>Live floor plan</h2></div><div className="stage-tools"><div className="room-signal" title="Live room signal">{data.tables.map(t=><i key={t.id} className={t.state} style={{height:`${Math.max(18,Math.round(t.last_confidence*100))}%`}}/>)}<span>Signal</span></div><div className="legend"><span><i className="ready"/>Ready</span><span><i className="dining"/>Dining</span><span><i className="attention"/>Attention</span><span><i className="clean"/>Clean</span></div></div></div>
+          <div className="map"><div className="scan-line"/><div className="bar"><span>Pass</span><strong>Service counter</strong><span>Pickup</span></div>{data.tables.map((t,index)=><button key={t.id} style={{left:`${t.zone_x}%`,top:`${t.zone_y}%`,"--delay":`${index*70}ms`,"--confidence":`${Math.round(t.last_confidence*100)}%`} as React.CSSProperties} className={`table ${t.state} ${selected===t.id?"selected":""}`} onClick={()=>setSelected(t.id)}><span className="table-number">{t.label.replace("Table ","")}</span><strong>{t.label}</strong><span>{labels[t.state]}</span>{t.elapsed_minutes>0&&<small>{t.elapsed_minutes} min</small>}<span className="confidence"/><em><Users/> {t.seats}</em></button>)}</div>
         </section>
 
         <aside className="dispatch">
-          <section className="queue"><div className="dispatch-heading"><div><p className="eyebrow">Dispatch feed</p><h2>Needs action</h2></div><span className="queue-count">{data.alerts.length}</span></div>{data.alerts.length===0?<p className="empty">No open alerts. The floor is moving normally.</p>:data.alerts.map(a=><article className={`alert ${a.priority}`} key={a.id}><div className="alert-meta"><span>{a.priority}</span><time>Now</time></div><strong>{a.table_id} - {a.alert_type.replaceAll("_"," ")}</strong><p>{a.message}</p><button title="Acknowledge alert" aria-label="Acknowledge alert" onClick={()=>act(`/api/alerts/${a.id}/acknowledge`,{server:"Sara"})}><Check/>Acknowledge</button></article>)}</section>
-          {chosen&&<section className="inspector"><div className="inspector-number">{chosen.label.replace("Table ","")}</div><div className="inspector-title"><div><p className="eyebrow">On the floor</p><h2>{chosen.label}</h2></div><span className={`state-pill ${chosen.state}`}>{labels[chosen.state]}</span></div><dl><div><dt>Assigned server</dt><dd>{chosen.assigned_server||"Unassigned"}</dd></div><div><dt>Elapsed</dt><dd>{chosen.elapsed_minutes} min</dd></div><div><dt>Confidence</dt><dd>{Math.round(chosen.last_confidence*100)}%</dd></div></dl>{chosen.state==="vacated_needs_cleaning"&&<button className="primary wide" onClick={()=>act(`/api/tables/${chosen.id}/cleaning`,{staff:"Nora",action:"complete"})}>Mark clean</button>}</section>}
+          <section className="queue"><div className="dispatch-heading"><div><p className="eyebrow">Dispatch feed</p><h2>Needs action</h2></div><span className="queue-count">{data.alerts.length}</span></div><div className="queue-filter"><button className={alertFilter==="all"?"active":""} onClick={()=>setAlertFilter("all")}>All</button><button className={alertFilter==="urgent"?"active":""} onClick={()=>setAlertFilter("urgent")}>Urgent</button></div>{shownAlerts.length===0?<p className="empty">No alerts in this view.</p>:shownAlerts.map((a,index)=><article className={`alert ${a.priority}`} style={{"--delay":`${index*90}ms`} as React.CSSProperties} key={a.id}><div className="alert-meta"><span>{a.priority}</span><time>Live</time></div><strong>{a.table_id} - {a.alert_type.replaceAll("_"," ")}</strong><p>{a.message}</p><button title="Acknowledge alert" aria-label="Acknowledge alert" onClick={()=>act(`/api/alerts/${a.id}/acknowledge`,{server:"Sara"})}><Check/>Acknowledge</button></article>)}</section>
+          {chosen&&<section className="inspector" key={chosen.id}><div className="inspector-number">{chosen.label.replace("Table ","")}</div><div className="inspector-title"><div><p className="eyebrow">On the floor</p><h2>{chosen.label}</h2></div><span className={`state-pill ${chosen.state}`}>{labels[chosen.state]}</span></div><dl><div><dt>Assigned server</dt><dd>{chosen.assigned_server||"Unassigned"}</dd></div><div><dt>Elapsed</dt><dd>{chosen.elapsed_minutes} min</dd></div><div><dt>Confidence</dt><dd>{Math.round(chosen.last_confidence*100)}%</dd></div></dl><div className="service-window"><div><span>Service window</span><b>{chosen.attention_after_minutes} min</b></div><i><b style={{width:`${Math.min(100,(chosen.elapsed_minutes/Math.max(chosen.attention_after_minutes,1))*100)}%`}}/></i></div>{chosen.state==="vacated_needs_cleaning"&&<button className="primary wide" onClick={()=>act(`/api/tables/${chosen.id}/cleaning`,{staff:"Nora",action:"complete"})}>Mark clean</button>}</section>}
           <div className="privacy"><EyeOff/><div><strong>Anonymous by design</strong><span>No faces or stored video.</span></div></div>
         </aside>
       </div>
